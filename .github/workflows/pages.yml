@@ -1,0 +1,61 @@
+name: Publish demonstrations
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build and test Weber demo
+        working-directory: works/possibilistic-weber/demo
+        run: |
+          node src/build.mjs
+          node src/check.mjs
+          node src/check-criterion.mjs
+          node src/check-nonradial.mjs
+          node src/check-hover.mjs
+          node src/check-worker.mjs
+          node src/check-design.mjs
+
+      - name: Prepare website
+        run: |
+          mkdir -p _site/possibilistic-weber/demo
+          cp works/possibilistic-weber/demo/index.html _site/possibilistic-weber/demo/index.html
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -38,6 +38,7 @@
 _minted*/
 
 # Build outputs (at any depth; project-specific rules belong in local .gitignore files)
+/_site/
 build/
 cmake-build-*/
 dist/
