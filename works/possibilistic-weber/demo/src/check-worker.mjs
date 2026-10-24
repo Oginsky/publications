@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import * as M from './model.mjs';
+const messages=[],timers=[],context=vm.createContext({M,postMessage:m=>messages.push(structuredClone(m)),performance:{now:()=>0},setTimeout:fn=>timers.push(fn)});
+vm.runInContext(readFileSync(new URL('./worker.mjs',import.meta.url),'utf8'),context);
+const send=data=>context.onmessage({data}),objects=M.initialObjects(),solver={...M.solverDefaults,reduction:false,eta0:2,maxIterations:3,tolerance:1e-10};
+send({type:'init',runId:1,objects,p:2,start:[8,7],solver});assert.equal(messages.at(-1).tail[0].k,0);
+const reference=M.startSolver(M.createModel(objects,2,64,false),[8,7],solver);
+send({type:'step'});M.iterate(reference);assert.deepEqual(messages.at(-1).x,reference.x);assert.equal(messages.at(-1).tail[0].k,1);
+send({type:'finish'});while(!reference.done)M.iterate(reference);
+assert.deepEqual(messages.at(-1).x,reference.x);assert.deepEqual(messages.at(-1).best,reference.best);assert.equal(messages.at(-1).tail.at(-1).k,3);assert(messages.at(-1).done);assert.match(messages.at(-1).reason,/точность не достигнута/);
+assert.deepEqual(messages.flatMap(m=>m.tail?.map(t=>t.k)||[]),[0,1,2,3]);assert(!('prox'in messages.at(-1)));
+const count=messages.length;send({type:'step'});assert.equal(messages.length,count,'A finished run must not send another completion');
+send({type:'init',runId:2,objects:[objects[0]],p:2,start:[0,0],solver});assert(messages.at(-1).done);assert.equal(messages.at(-1).k,0);const doneCount=messages.length;send({type:'step'});send({type:'finish'});assert.equal(messages.length,doneCount);
+send({type:'init',runId:3,objects,p:2,start:[8,7],solver});send({type:'play',speed:16});assert.equal(messages.at(-1).k,1);const frozen=messages.length;send({type:'pause'});timers.shift()();assert.equal(messages.length,frozen,'Pause invalidates the scheduled continuation');
+send({type:'init',runId:4,objects,p:2,start:[8,7],solver:{...solver,algorithm:'removed'}});assert.match(messages.at(-1).error,/Неизвестный алгоритм/);const failed=messages.length;send({type:'step'});assert.equal(messages.length,failed);
+console.log('Worker step/batch parity, trace numbering, best iterate, pause, initial optimum, single completion and invalid settings passed.');

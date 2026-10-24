@@ -1,0 +1,15 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {buildLessonGeometry} from './criterion-geometry.mjs';
+const read=name=>readFileSync(new URL(name,import.meta.url),'utf8');
+const kitScript=()=>read('./vendor/anatomy/iso-kit.mjs').replace(/^export /gm,'');
+const model=read('./model.mjs'),names=[...model.matchAll(/^export (?:const|function) (\w+)/gm)].map(v=>v[1]);
+const modelScript='const M=(()=>{'+model.replace(/^export /gm,'')+'\nreturn {'+names.join(',')+'};})();\n';
+const worker=modelScript+read('./worker.mjs');
+const criterion=read('./criterion-model.mjs'),criterionNames=[...criterion.matchAll(/^export (?:const|function) (\w+)/gm)].map(v=>v[1]);
+const criterionScript='const C=(()=>{'+criterion.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')+'\nreturn {'+criterionNames.join(',')+'};})();\n';
+const geometry=buildLessonGeometry();
+const css='/*\n'+read('./fonts/OFL.txt')+'\n*/\n'+read('./style.css').replace('__GOLOS_REGULAR__','data:font/woff;base64,'+readFileSync(new URL('./fonts/golos-text-regular.woff',import.meta.url)).toString('base64')).replace('__GOLOS_SEMIBOLD__','data:font/woff;base64,'+readFileSync(new URL('./fonts/golos-text-semibold.woff',import.meta.url)).toString('base64'));
+const script=kitScript()+'\n'+modelScript+'\nconst WORKER_SOURCE='+JSON.stringify(worker)+';\n'+read('./renderer.mjs')+'\n'+read('./app.mjs')+'\n'+criterionScript+'\nconst CRITERION_GEOMETRY='+JSON.stringify(geometry)+';\n'+read('./criterion-figure.mjs')+'\n'+read('./criterion-live.mjs');
+const html=read('./shell.html').replace('<!-- CRITERION -->',()=>read('./criterion-shell.html')).replace('/* CSS */',()=>css+'\n/*\n'+read('./vendor/anatomy/LICENSE')+'\n*/\n'+read('./vendor/anatomy/iso.css')+'\n'+read('./criterion.css')).replace('/* SCRIPT */',()=>script.replace(/<\/script/gi,'<\\/script'));
+writeFileSync(new URL('../index.html',import.meta.url),html);
+console.log('Built mathematical workspace:',Buffer.byteLength(html),'bytes');

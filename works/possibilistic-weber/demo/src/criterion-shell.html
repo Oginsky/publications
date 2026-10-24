@@ -1,0 +1,27 @@
+<dialog id="criterion-dialog" class="criterion-dialog" aria-labelledby="criterion-title">
+  <header class="criterion-heading"><div><span class="criterion-eyebrow">Интерактивное объяснение</span><h2 id="criterion-title">Анатомия критерия</h2></div><button id="criterion-close" class="panel-close" aria-label="Закрыть объяснение">×</button></header>
+  <div class="criterion-body">
+    <section class="criterion-figure" aria-label="Механизм построения критерия">
+      <div class="criterion-card iso" id="criterion-card" data-theme="light">
+        <div class="criterion-card-top"><span>Построение F₂</span><span>От области к одному числу</span></div>
+        <div id="criterion-canvas" class="criterion-canvas" tabindex="0" role="group" aria-label="Изометрический прибор. Стрелки выбирают срез, Enter переносит его в интегратор, Page Down и Page Up переключают этапы.">
+          <svg id="criterion-svg" class="iso-svg" viewBox="0 0 1100 660" role="img" aria-labelledby="criterion-svg-title criterion-svg-desc"><title id="criterion-svg-title">Кассета срезов, измеритель и интегратор на одной станине</title><desc id="criterion-svg-desc">Наведение выдвигает горизонтальный альфа-срез гауссовой области. Измеритель соединяет фиксированную точку с дальней границей среза. Перенос превращает измерение в элемент площади интеграла. Рейка справа складывает взвешенные расстояния.</desc><g id="criterion-machine"></g></svg>
+        </div>
+        <div class="criterion-card-bottom"><span id="criterion-hint">Клик по диску на столе / перетащите диск в интегратор</span><output id="criterion-readout"></output></div>
+      </div>
+      <div class="criterion-slice-strip" aria-label="Выбрать α-срез"><span>α</span><div id="criterion-slices"></div></div>
+      <div class="criterion-legend"><span><i></i>Светлый контур — выбранный срез и его вклад</span><span>Фиксированный пример · p = 2 · x = (3; 0)</span></div>
+    </section>
+    <aside class="criterion-side">
+      <nav class="criterion-steps" aria-label="Этапы построения критерия">
+        <button data-criterion-step="0" aria-current="step"><span>01</span> Область из срезов</button>
+        <button data-criterion-step="1"><span>02</span> Дальняя точка</button>
+        <button data-criterion-step="2"><span>03</span> Интегратор</button>
+        <button data-criterion-step="3"><span>04</span> Одно значение F₂</button>
+      </nav>
+      <div class="criterion-story" aria-live="polite"><span id="criterion-step-number" class="criterion-eyebrow"></span><h3 id="criterion-step-title"></h3><p id="criterion-step-text"></p><div id="criterion-step-formula" class="criterion-formula"></div><div id="criterion-step-values" class="criterion-values"></div><p id="criterion-step-note" class="criterion-note"></p></div>
+      <div class="criterion-example"><span class="criterion-eyebrow">Условия примера</span><p>Гауссова область с центром (0; 0), масштабом a = 1,2 и фиксированная точка x. Ещё два объекта дают остальные слагаемые суммы. Это самостоятельный пример: изменения в основном окне на него не влияют.</p></div>
+    </aside>
+  </div>
+  <footer class="criterion-controls"><div class="criterion-playback"><button id="criterion-tour">Пауза</button><button id="criterion-reset">Сбросить</button></div><span id="criterion-progress" role="status">0 / 12 срезов собрано</span></footer>
+</dialog>
