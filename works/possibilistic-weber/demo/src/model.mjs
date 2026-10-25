@@ -12,7 +12,7 @@ export function validate(objects,p){
   const ids=new Set();
   for(const o of objects){
     if(!Number.isInteger(o.id)||ids.has(o.id)||o.id<1)throw Error('Идентификаторы объектов должны быть уникальными положительными целыми.');ids.add(o.id);
-    const geom=shapeOf(o);if(!Object.hasOwn(shapes,geom.shape)||!Number.isFinite(geom.aspect)||geom.aspect<.1||geom.aspect>10||!Number.isFinite(geom.angle)||Math.abs(geom.angle)>360)throw Error('Форма среза: круг, эллипс или прямоугольник; пропорция 0,1…10; поворот −360…360°.');
+    const geom=shapeOf(o);if(!Object.hasOwn(shapes,geom.shape)||!Number.isFinite(geom.aspect)||geom.aspect<.1||geom.aspect>10||!Number.isFinite(geom.angle)||Math.abs(geom.angle)>360)throw Error('Форма α-уровневого множества: круг, эллипс или прямоугольник; пропорция 0,1…10; поворот −360…360°.');
     if(!Object.hasOwn(profiles,o.type))throw Error('Неизвестный профиль.');
     if(![o.x,o.y,o.a,o.b,o.core,o.q].every(Number.isFinite))throw Error('Параметры должны быть конечными числами.');
     if(Math.abs(o.x)>1e6||Math.abs(o.y)>1e6||o.a<0||o.a>1e6||o.a>0&&o.a<1e-6||o.b<=0||o.b>1e6)throw Error('Координаты и веса: до 10⁶; масштаб: 0 или 10⁻⁶…10⁶; β > 0.');
@@ -147,7 +147,7 @@ export function createModel(objects,p=2,order=64,reduction=true){
   return {objects:prepared,p,problem,order,reduction,general:objects.some(o=>!isSpherical(o))};
 }
 export function radial(d,o,p){
-  if(!isSpherical(o))throw Error('Радиальная редукция неприменима к несферическим срезам.');
+  if(!isSpherical(o))throw Error('Радиальная редукция неприменима к несферическим α-уровневым множествам.');
   if(!o.a)return {D:d,derivative:1};
   if(p===Infinity||o.type==='ball'||o.type==='trapezoid'&&o.core===1)return {D:d+o.a,derivative:1};
   if(p===1)return {D:d+o.m,derivative:1};
@@ -170,12 +170,12 @@ export function evaluate(x,model,details=false){
   return {F,g,norm,gap:norm*(model.general?2*F/model.objects.reduce((s,o)=>s+o.b,0):reach),reach,terms};
 }
 export const algorithms={subgradient:'Субградиентный метод'};
-export const solverDefaults={algorithm:'subgradient',reduction:true,eta0:10,tolerance:1e-5,maxIterations:20000};
+export const solverDefaults={algorithm:'subgradient',reduction:true,eta0:10,tolerance:1e-4,maxIterations:20000};
 export function solverOptions(options={}){
   if(!options||typeof options!=='object'||Array.isArray(options))throw Error('Некорректные настройки алгоритма.');
   const s={...solverDefaults,...options};
   if(!Object.hasOwn(algorithms,s.algorithm))throw Error('Неизвестный алгоритм расчёта.');
-  if(typeof s.reduction!=='boolean'||!Number.isFinite(s.eta0)||s.eta0<=0||s.eta0>1e6||!Number.isFinite(s.tolerance)||s.tolerance<1e-10||s.tolerance>1||!Number.isInteger(s.maxIterations)||s.maxIterations<1||s.maxIterations>200000)throw Error('η₀: 0…10⁶, ε: 10⁻¹⁰…1, лимит: 1…200 000 целых шагов; редукция — флажок.');
+  if(typeof s.reduction!=='boolean'||!Number.isFinite(s.eta0)||s.eta0<=0||s.eta0>1e6||!Number.isFinite(s.tolerance)||s.tolerance<1e-10||s.tolerance>1||!Number.isInteger(s.maxIterations)||s.maxIterations<1||s.maxIterations>200000)throw Error('η₀: 0…10⁶, ε: 10⁻¹⁰…1, лимит: 1…200 000 целых шагов; редукция - флажок.');
   return s;
 }
 export const subgradientPoint=(x,g,eta0,k=0)=>x.map((v,i)=>v-eta0*g[i]/(k+1));
@@ -200,7 +200,16 @@ export function iterate(s){
 }
 export function solve(model,start=[8,7],options={}){const s=startSolver(model,start,options);while(!s.done)iterate(s);return s;}
 export function formula(o){
-  return {triangle:'max(1 − r/a, 0)',trapezoid:'1 при r ≤ ba; (1 − r/a)/(1 − b) при ba < r < a',gaussian:'exp(−r² / 2a²)',exponential:'exp(−r/a)',parabola:'max(1 − r²/a², 0)',cosine:'(1 + cos(πr/a))/2 при r ≤ a',bell:'1 / (1 + (r/a)ᑫ)',ball:'1 при r ≤ a; 0 иначе'}[o.type];
+  return {
+    triangle:String.raw`\max\left(1-\frac{r}{a},0\right)`,
+    trapezoid:String.raw`\begin{cases}1&r\le ba\\\frac{1-r/a}{1-b}&ba<r<a\\0&r\ge a\end{cases}`,
+    gaussian:String.raw`\exp\left(-\frac{r^2}{2a^2}\right)`,
+    exponential:String.raw`\exp\left(-\frac{r}{a}\right)`,
+    parabola:String.raw`\max\left(1-\frac{r^2}{a^2},0\right)`,
+    cosine:String.raw`\begin{cases}\frac{1+\cos(\pi r/a)}{2}&r\le a\\0&r>a\end{cases}`,
+    bell:String.raw`\frac{1}{1+(r/a)^q}`,
+    ball:String.raw`\begin{cases}1&r\le a\\0&r>a\end{cases}`
+  }[o.type];
 }
 
 export function localPoint(point,o){const a=(o.angle??0)*Math.PI/180,c=Math.cos(a),s=Math.sin(a),x=point[0]-o.x,y=point[1]-o.y;return [c*x+s*y,-s*x+c*y];}
@@ -211,7 +220,11 @@ export function cutPoint(alpha,o,theta){
 }
 export function cutExtent(alpha,o){return radius(alpha,o)*(o.shape==='rectangle'?Math.hypot(1,o.aspect??1):Math.max(1,isSpherical(o)?1:o.aspect??1));}
 export function gauge(point,o){const [u,v]=localPoint(point,o),k=isSpherical(o)?1:o.aspect??1;return o.shape==='rectangle'?Math.max(Math.abs(u),Math.abs(v/k)):Math.hypot(u,v/k);}
-export function spatialFormula(o){return isSpherical(o)?'π(r) = '+formula(o):'π(z) = f(ρ(z)); ρ = '+(o.shape==='rectangle'?'max(|u|, |v|/k)':'√(u² + (v/k)²)')+'; (u,v) = Rot(−θ)(z − c); f(t) = '+formula(o).replaceAll('r','t');}
+export function spatialFormula(o){
+  if(isSpherical(o))return String.raw`\pi(r)=${formula(o)}`;
+  const rho=o.shape==='rectangle'?String.raw`\max\left(|u|,\frac{|v|}{k}\right)`:String.raw`\sqrt{u^2+\left(\frac{v}{k}\right)^2}`;
+  return String.raw`\begin{gathered}\pi(z)=f(\rho(z)),\quad\rho=${rho}\\(u,v)=\operatorname{Rot}(-\theta)(z-c)\\f(r)=${formula(o)}\end{gathered}`;
+}
 
 function ellipseFar(x,a,b){
   const swap=b>a;if(swap){[a,b]=[b,a];x=[x[1],x[0]];}

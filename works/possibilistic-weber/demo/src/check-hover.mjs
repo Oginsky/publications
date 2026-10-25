@@ -2,24 +2,29 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as M from './model.mjs';
+import {mathHTML,mathMarkup,mathSvg} from './math.mjs';
 const read=name=>readFileSync(new URL(name,import.meta.url),'utf8');
-const elements=new Map(),messages=[],blobs=[];
+const elements=new Map(),messages=[],blobs=[],documentListeners={};
 const element=selector=>{
-  if(!elements.has(selector))elements.set(selector,{value:selector==='#speed'?16:'',checked:false,hidden:true,style:{},dataset:{},innerHTML:'',textContent:'',listeners:{},classList:{toggle(){}},addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(){},focus(){},click(){},contains(){return false;},getBoundingClientRect(){return {left:0,top:0,width:800,height:600};},setPointerCapture(){},hasPointerCapture(){return false;}});
+  if(!elements.has(selector))elements.set(selector,{value:selector==='#speed'?3:'',checked:false,hidden:true,style:{setProperty(name,value){this[name]=value;}},dataset:{},innerHTML:'',textContent:'',listeners:{},classList:{values:new Set(),toggle(){},add(name){this.values.add(name);},remove(name){this.values.delete(name);}},addEventListener(type,fn){this.listeners[type]=fn;},setAttribute(name,value){this[name]=value;},focus(){},click(){},close(){this.open=false;},showModal(){this.open=true;},contains(){return false;},getBoundingClientRect(){return {left:0,top:0,right:800,bottom:600,width:800,height:600};},setPointerCapture(){},hasPointerCapture(){return false;}});
   return elements.get(selector);
 };
-const document={querySelector:element,querySelectorAll:()=>[],createElement:()=>({click(){}}),body:{dataset:{}},addEventListener(){},hidden:false};
+const document={querySelector:element,querySelectorAll:selector=>selector==='[data-tooltip]'?['#play','#step','#export','#theme'].map(element):[],createElement:()=>({click(){}}),body:{dataset:{}},addEventListener(type,fn){(documentListeners[type]??=[]).push(fn);},hidden:false};
 class Scene{
   constructor(){this.width=800;this.height=600;this.bounds={xmin:-10,xmax:20,ymin:-10,ymax:20,span:30};this.P={origin:[0,0],scale:20};this.Z=8;}
   fit(){} changed(){} render(){} at(x,y){return [200+20*x,200-20*y];} floor(x,y){return [x/10,y/10];}
 }
 let requests=0;
-const context=vm.createContext({M,MathSpace:Scene,document,window:{},WORKER_SOURCE:'',Worker:class{postMessage(m){messages.push(m);}},URL:{createObjectURL:()=>'',revokeObjectURL(){}},Blob:class{constructor(parts){blobs.push(parts.join(''));}},IntersectionObserver:class{observe(){}},requestAnimationFrame:()=>++requests,cancelAnimationFrame(){},setTimeout:()=>1,clearTimeout(){},matchMedia:()=>({matches:false})});
+const context=vm.createContext({M,mathHTML,mathMarkup,mathSvg,MathSpace:Scene,document,window:{},WORKER_SOURCE:'',Worker:class{postMessage(m){messages.push(m);}},URL:{createObjectURL:()=>'',revokeObjectURL(){}},Blob:class{constructor(parts){blobs.push(parts.join(''));}},ResizeObserver:class{observe(){}},getComputedStyle:()=>({getPropertyValue:()=> '390px',paddingLeft:'0',paddingRight:'0'}),IntersectionObserver:class{observe(){}},requestAnimationFrame:()=>++requests,cancelAnimationFrame(){},setTimeout:()=>1,clearTimeout(){},matchMedia:()=>({matches:false})});
 vm.runInContext(read('renderer.mjs').split('class MathSpace')[0]+read('app.mjs'),context);
 const app=vm.runInContext('app',context),stage=element('#stage'),state=()=>JSON.stringify(context.window.weberState());
 const move=(x,y)=>stage.listeners.pointermove({clientX:x,clientY:y});
 assert.deepEqual(JSON.parse(JSON.stringify(app.display)),{grid:true,labels:true,contours:false,paths:true,gradient:true,step:true,rays:'none'});
 assert.deepEqual(JSON.parse(JSON.stringify(app.solver)),M.solverDefaults);assert.equal(app.objects[2].type,'triangle');
+assert.match(element('#criterion-formula').innerHTML,/F_p\(x\)/);
+assert.match(element('#coordinates-tip').textContent,/Начальная точка/);
+assert.match(element('#bound-tip').innerHTML,/Не учитывает погрешность квадратуры/);
+const originalP=app.p;app.p=Infinity;vm.runInContext('render()',context);assert.match(element('#criterion-formula').innerHTML,/F_\\infty/);app.p=originalP;vm.runInContext('render()',context);
 app.display.gradient=false;app.display.step=false;
 let before=state(),count=requests;
 move(80,30);assert.equal(app.hover,null);assert.equal(requests,count);
@@ -38,15 +43,30 @@ element('#step').listeners.click();const firstRun=app.selectedRun;
 assert.deepEqual(JSON.parse(JSON.stringify(messages.find(m=>m.type==='init').solver)),M.solverDefaults);
 element('#reduction').checked=false;element('#reduction').listeners.change();assert.equal(app.model.reduction,false);assert.equal(app.selectedRun,null);assert.equal(firstRun.solver.reduction,true);assert.equal(app.runs.length,1);
 element('#eta0').value=7;element('#eta0').listeners.change();assert.equal(app.solver.eta0,7);
-element('#export').listeners.click();const exported=JSON.parse(blobs.at(-1));assert.equal(exported.solver.reduction,false);assert.equal(exported.solver.eta0,7);
+await element('#export').listeners.click();const exported=JSON.parse(blobs.at(-1));assert.equal(exported.solver.reduction,false);assert.equal(exported.solver.eta0,7);
+let written=null,closed=false,pickerOptions;
+context.window.showSaveFilePicker=async options=>{pickerOptions=options;return {createWritable:async()=>({write:async blob=>{written=blob;},close:async()=>{closed=true;}})};};
+await element('#export').listeners.click();assert.ok(written);assert.ok(closed);assert.equal(pickerOptions.suggestedName,'weber-scene.json');
+context.window.showSaveFilePicker=async()=>{throw Object.assign(new Error('cancelled'),{name:'AbortError'});};
+const previousToast=element('#toast').textContent;await element('#export').listeners.click();assert.equal(element('#toast').textContent,previousToast);
+context.window.showSaveFilePicker=async()=>{throw new Error('disk full');};
+await element('#export').listeners.click();assert.match(element('#toast').textContent,/Не удалось сохранить: disk full/);
 const importScene=async data=>element('#file-input').listeners.change({target:{files:[{size:100,text:async()=>JSON.stringify(data)}],value:'scene.json'}});
 await importScene({...exported,solver:{...exported.solver,eta0:4}});assert.equal(app.solver.eta0,4);assert.equal(app.model.reduction,false);
 const validState=state();await importScene({...exported,solver:{...exported.solver,algorithm:'removed'}});assert.equal(state(),validState);assert.match(element('#toast').textContent,/Неизвестный алгоритм/);
 const legacy={...exported};delete legacy.solver;await importScene(legacy);assert.deepEqual(JSON.parse(JSON.stringify(app.solver)),M.solverDefaults);
 element('#step').listeners.click();const saved=app.selectedRun;element('#eta0').value=8;element('#eta0').listeners.change();
 element('#run-list').listeners.click({target:{closest:()=>({dataset:{runId:String(saved.id)}})}});assert.equal(app.solver.eta0,10);assert.equal(app.selectedRun,saved);
+// Icon state and accessible names follow playback and theme; hints dismiss and reappear.
+element('#play').listeners.click();assert.equal(element('#play')['aria-label'],'Пауза');assert.equal(element('#play')['aria-pressed'],'true');
+element('#play').listeners.click();assert.equal(element('#play')['aria-label'],'Запустить');assert.equal(element('#play')['aria-pressed'],'false');
+element('#theme').listeners.click();assert.equal(element('#theme')['aria-label'],'Светлая тема');
+element('#theme').listeners.click();assert.equal(element('#theme')['aria-label'],'Тёмная тема');
+documentListeners.keydown.at(-1)({key:'Escape'});assert.ok(element('#play').classList.values.has('tooltip-dismissed'));
+element('#play').listeners.focus();assert.ok(!element('#play').classList.values.has('tooltip-dismissed'));
+documentListeners.keydown.at(-1)({key:'Escape'});element('#step').listeners.pointerenter();assert.ok(!element('#step').classList.values.has('tooltip-dismissed'));
 // Exercise the actual SVG renderer with WebGL and projection replaced.
-const MathSpace=vm.runInNewContext(read('renderer.mjs')+'\nMathSpace;',{M,document,ResizeObserver:class{observe(){}}});
+const MathSpace=vm.runInNewContext(read('renderer.mjs')+'\nMathSpace;',{M,mathHTML,mathSvg,document,ResizeObserver:class{observe(){}}});
 const camera=new MathSpace(element('#stage'));assert.equal(camera.heightFactor,.23);assert.equal(camera.elevation,25);assert.equal(camera.azimuth,55);
 const scene=Object.assign(Object.create(MathSpace.prototype),{bounds:{xmin:-10,xmax:20,ymin:-10,ymax:20,span:30},Z:8,gl:{},meshTheme:'light',meshDirty:false,field:null,elevation:38,width:800,height:600,back:{},front:{},drawGL(){},at(x,y,z=0){return [100+10*x,200-10*y-10*z];}});
 const objects=M.initialObjects(),sample={objects,model:M.createModel(objects),solver:{...M.solverDefaults,eta0:2,tolerance:1e-10},p:2,alpha:.4,view:'surfaces',selected:1,x:[8,7],start:[8,7],hover:[5,4],runs:[],selectedRun:null,iteration:0,display:{grid:false,labels:true,contours:false,paths:false,gradient:true,step:true,rays:'none'}};
@@ -68,3 +88,39 @@ sample.selectedRun=null;sample.hover=[5,4];sample.view='surfaces';scene.field=nu
 for(const eta0 of [0,-1,NaN,1e7]){sample.solver.eta0=eta0;assert.equal(stepMarker(draw()),undefined);}sample.solver.eta0=2;
 sample.objects=[objects[0]];sample.model=M.createModel(sample.objects);sample.hover=[0,0];assert.equal(stepMarker(draw()),undefined,'A zero subgradient has no next step');
 console.log('Hover, exact step geometry for every shape/reduction/view, historical k, settings/worker handoff, JSON round-trip, legacy scenes and invalid import passed.');
+
+// All information dialogs dismiss on a backdrop click, but not on padding or a drag out.
+for(const id of ['help','model-dialog','criterion-dialog']){
+  const dialog=element('#'+id),event=(x,y)=>({target:dialog,clientX:x,clientY:y});
+  dialog.open=true;dialog.listeners.pointerdown(event(20,20));dialog.listeners.click(event(20,20));assert.equal(dialog.open,true);
+  dialog.listeners.pointerdown(event(20,20));dialog.listeners.click(event(-10,20));assert.equal(dialog.open,true);
+  dialog.listeners.pointerdown(event(-10,20));dialog.listeners.pointercancel();dialog.listeners.click(event(-10,20));assert.equal(dialog.open,true);
+  dialog.listeners.pointerdown(event(-10,20));dialog.listeners.click(event(-10,20));assert.equal(dialog.open,false);
+}
+
+// The header and footer lead to different content; switching never stacks the two windows.
+element('#help-open').listeners.click();assert.equal(element('#help').open,true);assert.equal(element('#model-dialog').open,false);
+element('#model-from-help').listeners.click();assert.equal(element('#help').open,false);assert.equal(element('#model-dialog').open,true);
+element('#help-open').listeners.click();assert.equal(element('#model-dialog').open,false);assert.equal(element('#help').open,true);
+element('#help-footer').listeners.click();assert.equal(element('#help').open,false);assert.equal(element('#model-dialog').open,true);
+
+// The splitter preserves the minimum and the scene's space, and responds to keys.
+const splitter=element('#analysis-splitter'),panel=element('#analysis-panel'),bench=element('.workbench');
+bench.getBoundingClientRect=()=>({width:1200});panel.getBoundingClientRect=()=>({width:500});
+const pointer=(x,id=7)=>({button:0,clientX:x,pointerId:id,preventDefault(){}});
+splitter.listeners.pointerdown(pointer(700));splitter.listeners.pointermove(pointer(600));assert.equal(bench.style['--analysis-width'],'600px');
+splitter.listeners.pointermove(pointer(1000));assert.equal(bench.style['--analysis-width'],'390px');
+splitter.listeners.pointermove(pointer(0));assert.equal(bench.style['--analysis-width'],'680px');
+splitter.listeners.pointerup(pointer(650,8));splitter.listeners.pointermove(pointer(600));assert.equal(bench.style['--analysis-width'],'600px');
+splitter.listeners.pointercancel();splitter.listeners.pointermove(pointer(650));assert.equal(bench.style['--analysis-width'],'600px');
+for(const [key,expected] of [['ArrowLeft','520px'],['ArrowRight','480px'],['Home','390px'],['End','680px']]){
+  splitter.listeners.keydown({key,preventDefault(){}});assert.equal(bench.style['--analysis-width'],expected);
+}
+assert.equal(splitter['aria-valuemin'],'390');assert.equal(splitter['aria-valuemax'],'680');
+context.matchMedia=()=>({matches:true});splitter.listeners.pointerdown(pointer(700));splitter.listeners.pointermove(pointer(600));assert.equal(bench.style['--analysis-width'],'680px');
+
+// Pointer focus hides the scene ring; keyboard navigation restores it.
+stage.listeners.pointerdown({button:0,clientX:70,clientY:60,pointerId:21,preventDefault(){}});
+assert.ok(stage.classList.values.has('pointer-focus'));
+stage.listeners.pointerup({pointerId:21});
+documentListeners.keydown[0]({key:'Tab'});assert.ok(!stage.classList.values.has('pointer-focus'));

@@ -8,39 +8,39 @@
   function story(){
     const s=lesson.slices[selected],mass=[...collected].reduce((n,k)=>n+lesson.slices[k].mass,0);
     const content=[
-      ['Область, слой за слоем','Высота слоя — степень возможности α. Его контур охватывает все положения, для которых π(z) ≥ α. Внизу срезы широкие, у вершины сужаются. Выдвиньте любой слой: весь дальнейший путь относится именно к нему.',
-        'π(z) = exp(−‖z − c‖² / 2a²)<br>A(α) = B̄(c, a√(−2 ln α))',
-        [['Выбранный уровень α',fmt(s.alpha)],['Радиус среза r(α)',fmt(s.r)],['Центр / точка x','(0; 0) / (3; 0)']],
-        'Кассета показывает 12 выбранных горизонтальных сечений. Это не 12 отдельных объектов. Возможность не является вероятностью.'],
-      ['Измерить до дальней границы','На измерительном столе тот же срез лежит рядом с неподвижной точкой x. Светлый отрезок соединяет x с самой удалённой точкой круга. Для точки и множества именно это расстояние выбирает метрика Хаусдорфа.',
-        'R(α) = d<sub>H</sub>({x}, A(α))<br>= max<sub>z ∈ A(α)</sub> ‖x − z‖<br>= 3 + r(α)',
-        [['До ближайшей точки',fmt(s.near)],['До дальней точки R(α)',fmt(s.R)],['Её координаты', '('+fmt(s.far[0])+'; 0)']],
-        'Срез перенесён параллельно плоскости без изменения масштаба. Высота α не входит в евклидово расстояние; измерение происходит в одной горизонтальной плоскости.'],
-      ['Каждый слой оставляет вклад','Нажмите на диск измерительного стола или перетащите диск из кассеты в гребёнку интегратора. В пути он превращается в объёмный элемент: ширина соответствует Δα, высота — квадрату R(α). Соседние элементы заполняют площадь под профилем. Повторный перенос не удваивает вклад.',
-        'I = ∫₀¹ R(α)² dα<br>I₁₂ = Σ R(αₖ)² · Δα<br>D₂ = √I',
-        [['Δα', '1 / 12'],['Вклад выбранного среза',fmt(s.mass)],['Собрано в приборе',fmt(mass)],['Учебная сумма I₁₂',fmt(lesson.approximateI)],['Полный интеграл I',fmt(lesson.I)]],
-        'Учебные элементы берут середины интервалов. У гауссовой области r → ∞ при α → 0, поэтому 12 элементов дают приближение. Полный интеграл учитывает весь хвост. Масштаб высот интегратора свой.'],
-      ['Расстояния сходятся в сумму','Элементы интеграла сжимаются в одну мерную деталь: √I даёт расстояние D₂, а вес β — длину детали. Она проходит через пресс к упору рейки. Ещё два заранее подготовленных вклада выходят из держателя, проходят через тот же узел и встают рядом. Общая длина равна F₂.',
-        'D₂,ⱼ = √(∫₀¹ Rⱼ(α)² dα)<br>F₂(x) = Σⱼ βⱼ D₂,ⱼ',
-        [...lesson.terms.map((t,i)=>['β'+(i+1)+'D₂,'+(i+1)+' · β = '+lesson.objects[i].b.toLocaleString('ru-RU'),fmt(t.contribution)]),['Итог F₂(x)',fmt(lesson.F)]],
-        'Для первого объекта D₂ = '+fmt(lesson.D)+'. Корень извлекают отдельно для каждого объекта, затем умножают на вес и складывают. Рейка показывает полные значения; число перенесённых учебных срезов их не меняет.']
+      ['Область, слой за слоем',String.raw`Высота слоя - степень возможности \(\alpha\). Его контур охватывает все положения, для которых \(\pi(z)\ge\alpha\). Внизу α-уровневые множества широкие, у вершины сужаются. Выдвиньте любой слой: весь дальнейший путь относится именно к нему.`,
+        String.raw`\[\pi(z)=\exp\left(-\frac{\lVert z-c\rVert^2}{2a^2}\right)\]<br>\[A(\alpha)=\overline B\left(c,a\sqrt{-2\ln\alpha}\right)\]`,
+        [[String.raw`Выбранный уровень \(\alpha\)`,fmt(s.alpha)],[String.raw`Радиус α-уровневого множества \(r(\alpha)\)`,fmt(s.r)],['Центр / точка x','(0; 0) / (3; 0)']],
+        'Кассета показывает 12 выбранных α-уровневых множеств. Все множества относятся к одному объекту. Возможность не является вероятностью.'],
+      ['Измерить до дальней границы','На измерительном столе то же α-уровневое множество лежит рядом с неподвижной точкой x. Светлый отрезок соединяет x с самой удалённой точкой круга. Для точки и множества именно это расстояние выбирает метрика Хаусдорфа.',
+        String.raw`\[R(\alpha)=d_H(\{x\},A(\alpha))\]<br>\[=\max_{z\in A(\alpha)}\lVert x-z\rVert\]<br>\[=3+r(\alpha)\]`,
+        [['До ближайшей точки',fmt(s.near)],[String.raw`До дальней точки \(R(\alpha)\)`,fmt(s.R)],['Её координаты', '('+fmt(s.far[0])+'; 0)']],
+        String.raw`α-уровневое множество перенесено параллельно плоскости без изменения масштаба. Высота \(\alpha\) не входит в евклидово расстояние; измерение происходит в одной горизонтальной плоскости.`],
+      ['Каждый слой оставляет вклад',String.raw`Нажмите на диск измерительного стола или перетащите диск из кассеты в гребёнку интегратора. В пути он превращается в объёмный элемент: ширина соответствует \(\Delta\alpha\), высота - квадрату \(R(\alpha)\). Соседние элементы заполняют площадь под профилем. Повторный перенос не удваивает вклад.`,
+        String.raw`\[I=\int_0^1R(\alpha)^2\,d\alpha\]<br>\[I_{12}=\sum_{k=1}^{12}R(\alpha_k)^2\,\Delta\alpha\]<br>\[D_2=\sqrt I\]`,
+        [[String.raw`\(\Delta\alpha\)`, '1 / 12'],['Вклад выбранного α-уровневого множества',fmt(s.mass)],['Собрано в приборе',fmt(mass)],[String.raw`Учебная сумма \(I_{12}\)`,fmt(lesson.approximateI)],['Полный интеграл I',fmt(lesson.I)]],
+        String.raw`Учебные элементы берут середины интервалов. У гауссовой области \(r\to\infty\) при \(\alpha\to0\), поэтому 12 элементов дают приближение. Полный интеграл учитывает весь хвост. Высота элементов показана в условном масштабе.`],
+      ['Расстояния сходятся в сумму',String.raw`Элементы интеграла сжимаются в одну мерную деталь: \(\sqrt I\) даёт расстояние \(D_2\), а вес \(\beta\) - длину детали. Она проходит через пресс к упору рейки. Ещё два заранее подготовленных вклада выходят из держателя, проходят через тот же узел и встают рядом. Общая длина равна \(F_2\).`,
+        String.raw`\[D_{2,j}=\sqrt{\int_0^1R_j(\alpha)^2\,d\alpha}\]<br>\[F_2(x)=\sum_j\beta_jD_{2,j}\]`,
+        [...lesson.terms.map((t,i)=>[String.raw`\(\beta_{${i+1}}D_{2,${i+1}}\) · \(\beta_{${i+1}}=${lesson.objects[i].b}\)`,fmt(t.contribution)]),[String.raw`Итог \(F_2(x)\)`,fmt(lesson.F)]],
+        String.raw`Для первого объекта \(D_2\) = `+fmt(lesson.D)+'. Корень извлекают отдельно для каждого объекта, затем умножают на вес и складывают. Длина рейки равна сумме вкладов всех трёх объектов.']
     ][stage];
     q('#criterion-step-number').textContent='Шаг '+(stage+1)+' из 4';
-    q('#criterion-step-title').textContent=content[0];q('#criterion-step-text').textContent=content[1];
-    q('#criterion-step-formula').innerHTML=content[2];
-    q('#criterion-step-values').innerHTML=content[3].map(([a,b])=>'<div><span>'+a+'</span><strong>'+b+'</strong></div>').join('');
-    q('#criterion-step-note').textContent=content[4];
+    q('#criterion-step-title').textContent=content[0];q('#criterion-step-text').innerHTML=mathMarkup(content[1]);
+    q('#criterion-step-formula').innerHTML=mathMarkup(content[2]);
+    q('#criterion-step-values').innerHTML=mathMarkup(content[3].map(([a,b])=>'<div><span>'+a+'</span><strong>'+b+'</strong></div>').join(''));
+    q('#criterion-step-note').innerHTML=mathMarkup(content[4]);
     all('[data-criterion-step]').forEach(b=>b.setAttribute('aria-current',Number(b.dataset.criterionStep)===stage?'step':'false'));
     all('[data-level]').forEach(b=>{b.setAttribute('aria-pressed',String(Number(b.dataset.level)===selected));b.dataset.collected=collected.has(Number(b.dataset.level));});
-    q('#criterion-progress').textContent=collected.size+' / 12 срезов собрано';
+    q('#criterion-progress').textContent='Собрано α-уровневых множеств: '+collected.size+' / 12';
     q('#criterion-tour').disabled=still.matches;
     q('#criterion-tour').textContent=still.matches?'Автопоказ отключён':touring?'Пауза':'Запустить механизм';
-    q('#criterion-readout').textContent=stage===3?'F₂ = '+fmt(lesson.F):'α = '+fmt(s.alpha)+' / R = '+fmt(s.R);
-    q('#criterion-hint').textContent=drag?.active?'Отпустите диск над интегратором':flight?'Срез превращается в элемент R²Δα':stage===3?'Интеграл → мерная деталь → сумма':'Клик по диску на столе / перетащите диск в интегратор';
+    q('#criterion-readout').innerHTML=mathMarkup(stage===3?String.raw`\(F_2\) = `+fmt(lesson.F):String.raw`\(\alpha\) = `+fmt(s.alpha)+' / R = '+fmt(s.R));
+    q('#criterion-hint').innerHTML=mathMarkup(drag?.active?'Отпустите диск над интегратором':flight?String.raw`α-уровневое множество превращается в элемент \(R^2\Delta\alpha\)`:stage===3?'Интеграл → мерная деталь → сумма':'Клик по диску на столе / перетащите диск в интегратор');
   }
   function paint(dt=.016){
     const moving=figure.draw(lesson,selected,collected,stage,dt,still.matches,flight,drag);
-    if(stage===3)q('#criterion-readout').textContent=figure.outputTime<.84?'I → √I: собираем мерную деталь':figure.outputTime<C.outputSeconds?'Проводим вклады через пресс…':'F₂ = '+fmt(lesson.F);
+    if(stage===3)q('#criterion-readout').innerHTML=mathMarkup(figure.outputTime<.84?String.raw`I → \(\sqrt I\): собираем мерную деталь`:figure.outputTime<C.outputSeconds?'Проводим вклады через пресс…':String.raw`\(F_2\) = `+fmt(lesson.F));
     return moving;
   }
   function stopTour(){touring=false;tourClock=0;q('#criterion-tour').textContent=still.matches?'Автопоказ отключён':'Запустить механизм';}
@@ -64,7 +64,7 @@
   function tick(now){
     frame=0;if(!dialog.open||!visible||document.hidden)return;
     drawing=true;
-    const dt=last?Math.min((now-last)/1000,1/30):1/60;last=now;
+    const dt=(last?Math.min((now-last)/1000,1/30):1/60)*.75;last=now;
     if(flight){
       flight.t=Math.min(1,flight.t+dt/flight.duration);
       if(flight.t>=1){collected.add(selected);flight=null;if(!touring&&collected.size===12)stage=3;story();if(touring)tourClock=0;}
@@ -83,13 +83,13 @@
     if(moving||flight||touring||drag?.active)frame=requestAnimationFrame(tick);
   }
   function open(){
-    returnFocus=document.activeElement;
-    const help=document.querySelector('#help');if(help.open)help.close();
+    returnFocus=document.activeElement?.id==='criterion-from-tip'?document.querySelector('#criterion-readout-help'):document.activeElement;
+    for(const id of ['help','model-dialog']){const info=document.querySelector('#'+id);if(info.open)info.close();}
     q('#criterion-card').dataset.theme=document.body.dataset.theme==='dark'?'dark':'light';
     dialog.showModal();reset();
     if(!still.matches)startTour();
   }
-  for(const id of['criterion-open','criterion-from-help'])document.getElementById(id).addEventListener('click',open);
+  for(const id of['criterion-open','criterion-from-help','criterion-from-tip'])document.getElementById(id).addEventListener('click',open);
   q('#criterion-close').addEventListener('click',()=>dialog.close());
   dialog.addEventListener('close',()=>{stopTour();cancelAnimationFrame(frame);frame=0;flight=null;cancelDrag();returnFocus?.isConnected&&returnFocus.getClientRects().length?returnFocus.focus():document.querySelector('#criterion-open').focus();});
   dialog.addEventListener('keydown',e=>{

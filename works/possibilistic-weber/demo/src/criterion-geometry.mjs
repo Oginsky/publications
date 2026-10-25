@@ -121,7 +121,7 @@ export function buildLessonGeometry(){
   }
   // The section and its measurement are drawn after their supporting bed.
   const seatIndex=items.findIndex(s=>s.includes('data-item="comb.bed"'));
-  items.splice(seatIndex,0,'<g data-seat role="button" tabindex="-1" aria-label="Нажмите на измеренный срез или перетащите его в интегратор">'+seats.map((svg,i)=>'<g data-seat-slice="'+i+'" style="display:none">'+svg+'</g>').join('')+'</g>');
+  items.splice(seatIndex,0,'<g data-seat role="button" tabindex="-1" aria-label="Нажмите на измеренный α-уровневое множество или перетащите его в интегратор">'+seats.map((svg,i)=>'<g data-seat-slice="'+i+'" style="display:none">'+svg+'</g>').join('')+'</g>');
   const crown=lesson.slices.map(s=>at([19.25+s.k*8.5,-23,8+s.height*1.8]));
   const curve=line(k.pathOf(crown),'lo')+k.dotsSvg([crown[0],crown.at(-1)],{size:1,tone:'mid'});
   return {P,svg:'<path class="iso-halo" d="'+k.haloOf(BASE,-18,12,P)+'"/>'+items.join('')+'<g data-crown>'+curve+'</g><g data-output-front></g><g data-packet visibility="hidden"></g>',parts:R.items.length};

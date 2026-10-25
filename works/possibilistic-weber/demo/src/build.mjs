@@ -1,4 +1,5 @@
 import {readFileSync,writeFileSync} from 'node:fs';
+import {mathMarkup} from './math.mjs';
 import {buildLessonGeometry} from './criterion-geometry.mjs';
 const read=name=>readFileSync(new URL(name,import.meta.url),'utf8');
 const kitScript=()=>read('./vendor/anatomy/iso-kit.mjs').replace(/^export /gm,'');
@@ -9,7 +10,13 @@ const criterion=read('./criterion-model.mjs'),criterionNames=[...criterion.match
 const criterionScript='const C=(()=>{'+criterion.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')+'\nreturn {'+criterionNames.join(',')+'};})();\n';
 const geometry=buildLessonGeometry();
 const css='/*\n'+read('./fonts/OFL.txt')+'\n*/\n'+read('./style.css').replace('__GOLOS_REGULAR__','data:font/woff;base64,'+readFileSync(new URL('./fonts/golos-text-regular.woff',import.meta.url)).toString('base64')).replace('__GOLOS_SEMIBOLD__','data:font/woff;base64,'+readFileSync(new URL('./fonts/golos-text-semibold.woff',import.meta.url)).toString('base64'));
-const script=kitScript()+'\n'+modelScript+'\nconst WORKER_SOURCE='+JSON.stringify(worker)+';\n'+read('./renderer.mjs')+'\n'+read('./app.mjs')+'\n'+criterionScript+'\nconst CRITERION_GEOMETRY='+JSON.stringify(geometry)+';\n'+read('./criterion-figure.mjs')+'\n'+read('./criterion-live.mjs');
-const html=read('./shell.html').replace('<!-- CRITERION -->',()=>read('./criterion-shell.html')).replace('/* CSS */',()=>css+'\n/*\n'+read('./vendor/anatomy/LICENSE')+'\n*/\n'+read('./vendor/anatomy/iso.css')+'\n'+read('./criterion.css')).replace('/* SCRIPT */',()=>script.replace(/<\/script/gi,'<\\/script'));
+const mathScript=read('./math.mjs').replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'');
+const mathCSS=read('./vendor/katex/katex.min.css').replace(/src:[^;]+;/g,source=>{
+  const font=source.match(/fonts\/([^\s)]+\.woff2)/)?.[1];
+  if(!font)throw Error('Missing WOFF2 math font');
+  return 'src:url(data:font/woff2;base64,'+readFileSync(new URL('./vendor/katex/fonts/'+font,import.meta.url)).toString('base64')+') format("woff2");';
+});
+const script=read('./vendor/katex/katex.min.js')+';\n'+mathScript+'\n'+kitScript()+'\n'+modelScript+'\nconst WORKER_SOURCE='+JSON.stringify(worker)+';\n'+read('./renderer.mjs')+'\n'+read('./app.mjs')+'\n'+criterionScript+'\nconst CRITERION_GEOMETRY='+JSON.stringify(geometry)+';\n'+read('./criterion-figure.mjs')+'\n'+read('./criterion-live.mjs');
+const html=mathMarkup(read('./shell.html').replace(/<!-- ICON:([a-z0-9-]+) -->/g,(_,name)=>read('./vendor/lucide/'+name+'.svg').replace('<svg','<svg class="icon icon-'+name+'" aria-hidden="true" focusable="false"')).replace('<!-- CRITERION -->',()=>read('./criterion-shell.html'))).replace('/* CSS */',()=>mathCSS+'\n'+css+'\n/*\n'+read('./vendor/anatomy/LICENSE')+'\n'+read('./vendor/lucide/LICENSE')+'\n'+read('./vendor/katex/LICENSE')+'\n*/\n'+read('./vendor/anatomy/iso.css')+'\n'+read('./criterion.css')).replace('/* SCRIPT */',()=>script.replace(/<\/script/gi,'<\\/script'));
 writeFileSync(new URL('../index.html',import.meta.url),html);
 console.log('Built mathematical workspace:',Buffer.byteLength(html),'bytes');

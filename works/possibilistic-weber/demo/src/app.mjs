@@ -1,4 +1,4 @@
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],nf=(v,n=3)=>!Number.isFinite(v)?v===Infinity?'∞':'—':v.toLocaleString('ru-RU',{maximumFractionDigits:n,minimumFractionDigits:n}),pt=(v,n=3)=>'('+v.map(x=>nf(x,n)).join('; ')+')',pn=p=>p===Infinity?'∞':nf(p,p%1?2:0);
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],nf=(v,n=3)=>!Number.isFinite(v)?v===Infinity?'∞':'-':v.toLocaleString('ru-RU',{maximumFractionDigits:n,minimumFractionDigits:n}),pt=(v,n=3)=>'('+v.map(x=>nf(x,n)).join('; ')+')',pn=p=>p===Infinity?'∞':nf(p,p%1?2:0);
 const app={objects:M.mixedObjects().map(o=>o.id===3?{...o,type:'triangle'}:o),selected:1,p:2,solver:{...M.solverDefaults},alpha:.4,view:'surfaces',tool:'select',x:[8,7],start:[8,7],hover:null,runs:[],selectedRun:null,display:{grid:true,labels:true,contours:false,paths:true,gradient:true,step:true,rays:'none'}};
 app.model=M.createModel(app.objects,app.p,64,app.solver.reduction);
 const scene=new MathSpace($('#stage'));let runCounter=0,activeId=null,running=false,dirty=true,raf=0,visible=true,scrubIndex=null,multiQueue=[],multiTimer=0,toastTimer=0,drag=null;
@@ -6,7 +6,7 @@ const worker=new Worker(URL.createObjectURL(new Blob([WORKER_SOURCE],{type:'text
 function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4500);}
 function safe(fn){try{return fn();}catch(error){toast(error.message);return false;}}
 function schedule(){dirty=true;if(!raf&&visible&&!document.hidden)raf=requestAnimationFrame(()=>{raf=0;if(dirty)render();});}
-function pause(){clearTimeout(multiTimer);worker.postMessage({type:'pause'});running=false;$('#play').textContent='Запустить';}
+function pause(){clearTimeout(multiTimer);worker.postMessage({type:'pause'});running=false;$('#play').setAttribute('aria-label','Запустить');$('#play').setAttribute('aria-pressed','false');}
 function selected(){return app.objects.find(o=>o.id===app.selected)||app.objects[0];}
 function currentTrace(){const run=app.selectedRun;return run?.trace[scrubIndex===null?run.trace.length-1:Math.min(scrubIndex,run.trace.length-1)];}
 function closeEditor(){$('#object-editor').hidden=true;}
@@ -14,7 +14,7 @@ function showEditor(){
   $('#objects-panel').hidden=true;$('#objects-toggle').setAttribute('aria-expanded','false');$('#object-editor').hidden=false;
 }
 function showAnalysis(open=true){
-  $('#analysis-panel').hidden=!open;$('.workbench').classList.toggle('has-analysis',open);$('#analysis-toggle').setAttribute('aria-expanded',String(open));schedule();
+  $('#analysis-panel').hidden=!open;$('.workbench').classList.toggle('has-analysis',open);$('#analysis-toggle').setAttribute('aria-expanded',String(open));if(open)setAnalysisWidth($('#analysis-panel').getBoundingClientRect().width);else endAnalysisResize();schedule();
   if(open&&matchMedia('(max-width:680px) and (max-height:750px)').matches)requestAnimationFrame(()=>{if(!$('#analysis-panel').hidden)$('#analysis-panel').scrollIntoView({block:'end'});});
 }
 $('#objects-toggle').addEventListener('click',()=>{const open=$('#objects-panel').hidden;closeEditor();$('#objects-panel').hidden=!open;$('#objects-toggle').setAttribute('aria-expanded',String(open));});
@@ -22,6 +22,37 @@ $('#objects-close').addEventListener('click',()=>{$('#objects-panel').hidden=tru
 $('#editor-close').addEventListener('click',()=>{closeEditor();$('#stage').focus({preventScroll:true});});
 $('#analysis-toggle').addEventListener('click',()=>showAnalysis($('#analysis-panel').hidden));
 $('#analysis-close').addEventListener('click',()=>{showAnalysis(false);$('#analysis-toggle').focus();});
+const analysisSplitter=$('#analysis-splitter'),workbench=$('.workbench');
+let analysisDrag=null;
+function analysisBounds(){
+  const style=getComputedStyle(workbench),min=parseFloat(style.getPropertyValue('--analysis-min'));
+  return {min,max:Math.max(min,workbench.getBoundingClientRect().width-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight)-520)};
+}
+function setAnalysisWidth(width){
+  if(matchMedia('(max-width:900px)').matches)return;
+  const {min,max}=analysisBounds(),value=Math.round(Math.max(min,Math.min(max,width)));
+  workbench.style.setProperty('--analysis-width',value+'px');
+  for(const [key,v] of Object.entries({min,max,now:value}))analysisSplitter.setAttribute('aria-value'+key,String(Math.round(v)));
+}
+function endAnalysisResize(e){
+  if(!analysisDrag||(e&&e.pointerId!==analysisDrag.id))return;
+  const id=analysisDrag.id;analysisDrag=null;workbench.classList.remove('resizing-analysis');
+  if(analysisSplitter.hasPointerCapture(id))analysisSplitter.releasePointerCapture(id);
+}
+analysisSplitter.addEventListener('pointerdown',e=>{
+  if(analysisDrag||e.button!==0||matchMedia('(max-width:900px)').matches)return;
+  e.preventDefault();analysisSplitter.focus();analysisDrag={id:e.pointerId,x:e.clientX,width:$('#analysis-panel').getBoundingClientRect().width};
+  analysisSplitter.setPointerCapture(e.pointerId);workbench.classList.add('resizing-analysis');
+});
+analysisSplitter.addEventListener('pointermove',e=>{if(analysisDrag&&analysisDrag.id===e.pointerId)setAnalysisWidth(analysisDrag.width+analysisDrag.x-e.clientX);});
+for(const type of ['pointerup','pointercancel','lostpointercapture'])analysisSplitter.addEventListener(type,endAnalysisResize);
+analysisSplitter.addEventListener('keydown',e=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key)||matchMedia('(max-width:900px)').matches)return;
+  e.preventDefault();const {min,max}=analysisBounds(),width=$('#analysis-panel').getBoundingClientRect().width;
+  setAnalysisWidth(e.key==='Home'?min:e.key==='End'?max:width+(e.key==='ArrowLeft'?20:-20));
+});
+new ResizeObserver(()=>{if(!$('#analysis-panel').hidden)setAnalysisWidth($('#analysis-panel').getBoundingClientRect().width);}).observe(workbench);
+
 $('#display-close').addEventListener('click',()=>{$('#display-settings').open=false;$('#display-settings summary').focus();});
 function dismissEditor(e){
   if(!$('#object-editor').contains(e.target)&&!$('#stage').contains(e.target)&&!e.target.closest('[data-object-id],[data-table-object]'))closeEditor();
@@ -33,18 +64,19 @@ document.addEventListener('click',e=>{
   if(!$('#objects-panel').contains(e.target)&&!$('#objects-toggle').contains(e.target)){$('#objects-panel').hidden=true;$('#objects-toggle').setAttribute('aria-expanded','false');}
 });
 document.addEventListener('keydown',e=>{
+  $('#stage').classList.remove('pointer-focus');
   if(e.key==='Escape'){
     const editorOpen=!$('#object-editor').hidden;closeEditor();showAnalysis(false);$('#objects-panel').hidden=true;$('#objects-toggle').setAttribute('aria-expanded','false');$('#display-settings').open=false;$('#solver-settings').open=false;
     if(editorOpen)$('#stage').focus({preventScroll:true});
   }
 });
-function setTool(tool){if(tool!=='select'){closeEditor();$('#objects-panel').hidden=true;$('#objects-toggle').setAttribute('aria-expanded','false');}app.tool=tool;$$('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool)));$('#stage-hint').textContent={select:'Перетащите центр объекта. Колесо: масштаб; зажатое колесо: вращение.',add:'Щёлкните в плоскости, чтобы добавить объект',start:'Щёлкните в плоскости, чтобы задать x₀',pan:'Перетаскивайте пространство; колесо меняет масштаб'}[tool];$('#stage').style.cursor=tool==='pan'?'grab':'crosshair';}
+function setTool(tool){if(tool!=='select'){closeEditor();$('#objects-panel').hidden=true;$('#objects-toggle').setAttribute('aria-expanded','false');}app.tool=tool;$$('[data-tool]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.tool===tool)));$('#stage-hint').innerHTML={select:'Перетащите центр объекта. Колесо: масштаб; зажатое колесо: вращение.',add:'Щёлкните в плоскости, чтобы добавить объект',start:'Щёлкните в плоскости, чтобы задать '+mathHTML('x_0'),pan:'Перетаскивайте пространство; колесо меняет масштаб'}[tool];$('#stage').style.cursor=tool==='pan'?'grab':'crosshair';}
 function syncEditor(){
-  const o=selected();$('#editor-title').textContent='A'+o.id;for(const key of['x','y','a','b','type','core','q'])$('#obj-'+key).value=o[key];$('#obj-shape').value=M.shapeOf(o).shape;$('#obj-aspect').value=M.shapeOf(o).aspect;$('#obj-angle').value=M.shapeOf(o).angle;$('#geometry-control').hidden=M.isSpherical(o);$('#scale-slider').value=Math.min(10,o.a);$('#core-control').hidden=o.type!=='trapezoid';$('#q-control').hidden=o.type!=='bell';$('#delete').disabled=app.objects.length<=1;
+  const o=selected();$('#editor-title').innerHTML=mathHTML('A_{'+o.id+'}');for(const key of['x','y','a','b','type','core','q'])$('#obj-'+key).value=o[key];$('#obj-shape').value=M.shapeOf(o).shape;$('#obj-aspect').value=M.shapeOf(o).aspect;$('#obj-angle').value=M.shapeOf(o).angle;$('#geometry-control').hidden=M.isSpherical(o);$('#scale-slider').value=Math.min(10,o.a);$('#core-control').hidden=o.type!=='trapezoid';$('#q-control').hidden=o.type!=='bell';$('#delete').disabled=app.objects.length<=1;
 }
 function syncObjects(){
   $('#object-count').textContent=app.objects.length;
-  $('#object-list').innerHTML=app.objects.map(o=>`<button class="object-row" data-object-id="${o.id}" aria-pressed="${o.id===app.selected}" style="--object:${colorFor(o)}"><i class="object-dot"></i><span class="object-name">A${o.id}</span><span class="object-type">${M.profiles[o.type]}${M.isSpherical(o)?'':' · '+M.shapes[o.shape]}</span><span class="object-position">${nf(o.x,1)}; ${nf(o.y,1)}</span></button>`).join('');
+  $('#object-list').innerHTML=app.objects.map(o=>`<button class="object-row" data-object-id="${o.id}" aria-pressed="${o.id===app.selected}" style="--object:${colorFor(o)}"><i class="object-dot"></i><span class="object-name">${mathHTML('A_{'+o.id+'}')}</span><span class="object-type">${M.profiles[o.type]}${M.isSpherical(o)?'':' · '+M.shapes[o.shape]}</span><span class="object-position">${nf(o.x,1)}; ${nf(o.y,1)}</span></button>`).join('');
   syncEditor();
 }
 function setSelected(id){const changed=app.selected!==id;app.selected=id;syncObjects();showEditor();if(changed)$('#object-editor').scrollTop=0;schedule();}
@@ -61,7 +93,7 @@ function setP(p){M.validate(app.objects,p);app.p=p;invalidate(false);}
 function setStart(start,announce=true){
   if(!start.every(Number.isFinite)||start.some(v=>Math.abs(v)>1e6))throw Error('Начальная точка должна быть в диапазоне ±10⁶.');
   closeEditor();
-  pause();activeId=null;multiQueue=[];app.start=start.map(v=>Number(v.toPrecision(12)));app.x=[...app.start];app.selectedRun=null;scrubIndex=null;$('#start-x').value=app.start[0];$('#start-y').value=app.start[1];$('#solver-status').textContent='Начальная точка x₀ = '+pt(app.start);if(announce)toast('Новый старт '+pt(app.start));schedule();
+  pause();activeId=null;multiQueue=[];app.start=start.map(v=>Number(v.toPrecision(12)));app.x=[...app.start];app.selectedRun=null;scrubIndex=null;$('#start-x').value=app.start[0];$('#start-y').value=app.start[1];$('#solver-status').innerHTML='Начальная точка '+mathHTML('x_0')+' = '+pt(app.start);if(announce)toast('Новый старт '+pt(app.start));schedule();
 }
 function addObject(point,copy=false){
   const id=Math.max(0,...app.objects.map(o=>o.id))+1,source=copy?selected():{type:'triangle',a:1.5,b:1,core:.35,q:4,shape:'circle',aspect:1,angle:0};
@@ -72,18 +104,18 @@ function solverParameters(){const solver=M.solverOptions({algorithm:$('#algorith
 function startRun(mode='play',start=app.start){
   if(app.model.problem)throw Error(app.model.problem);const {speed,...solver}=solverParameters();
   pause();const id=++runCounter;activeId=id;const run={id,start:[...start],p:app.p,solver,color:M.palette[(id-1)%M.palette.length],trace:[],k:0,done:false,tolerance:solver.tolerance};app.runs.push(run);app.selectedRun=run;app.start=[...start];app.x=[...start];scrubIndex=null;$('#start-x').value=start[0];$('#start-y').value=start[1];
-  worker.postMessage({type:'init',runId:id,objects:app.objects,p:app.p,start,solver});worker.postMessage({type:mode,speed});running=mode!=='step';$('#play').textContent=running?'Пауза':'Запустить';$('#solver-status').textContent='Расчёт '+id+' · p = '+pn(app.p);schedule();
+  worker.postMessage({type:'init',runId:id,objects:app.objects,p:app.p,start,solver});worker.postMessage({type:mode,speed});running=mode!=='step';$('#play').setAttribute('aria-label',running?'Пауза':'Запустить');$('#play').setAttribute('aria-pressed',String(running));$('#solver-status').textContent='Расчёт '+id+' · p = '+pn(app.p);schedule();
 }
 function continueRun(mode){
   if(!app.selectedRun||app.selectedRun.id!==activeId||app.selectedRun.done||scrubIndex!==null)return startRun(mode);
-  const {speed}=solverParameters();worker.postMessage({type:mode,speed});running=mode!=='step';$('#play').textContent=running?'Пауза':'Запустить';schedule();
+  const {speed}=solverParameters();worker.postMessage({type:mode,speed});running=mode!=='step';$('#play').setAttribute('aria-label',running?'Пауза':'Запустить');$('#play').setAttribute('aria-pressed',String(running));schedule();
 }
 worker.onmessage=e=>{
   const d=e.data,run=app.runs.find(r=>r.id===d.runId);if(!run||d.runId!==activeId||app.selectedRun?.id!==d.runId)return;
   if(d.error){pause();toast(d.error);$('#solver-status').textContent=d.error;return;}
   run.trace.push(...d.tail);run.x=d.x;run.k=d.k;run.done=d.done;run.reason=d.reason;run.best=d.best;app.selectedRun=run;
   if(scrubIndex===null)app.x=[...d.x];
-  if(d.done){running=false;$('#play').textContent='Запустить';const value=run.trace.at(-1);$('#solver-status').textContent=(d.reason||'Завершено')+' · '+d.k+' шагов · ε = '+nf(value.gap,8);
+  if(d.done){running=false;$('#play').setAttribute('aria-label','Запустить');$('#play').setAttribute('aria-pressed','false');const value=run.trace.at(-1);$('#solver-status').textContent=(d.reason||'Завершено')+' · '+d.k+' шагов · ε = '+nf(value.gap,8);
     if(multiQueue.length){const next=multiQueue.shift();multiTimer=setTimeout(()=>safe(()=>startRun('finish',next)),80);}
   }else $('#solver-status').textContent=(running?'Выполняется':'Шаг выполнен')+' · запуск '+run.id+' · '+M.algorithms[run.solver.algorithm];
   schedule();
@@ -93,32 +125,37 @@ function profilePlot(o){
   const W=270,H=111,x0=24,y0=85,maxR=Math.max(o.a,M.radius(.03,o),M.radius(app.alpha,o),.5)*1.04,points=[];
   for(let i=0;i<=150;i++){const r=maxR*i/150;points.push([x0+r/maxR*230,y0-M.membership(r,o)*67]);}
   const r=M.radius(app.alpha,o),p=[x0+r/maxR*230,y0-app.alpha*67];
-  $('#profile-chart').innerHTML=`<path class="svg-plot-grid" d="M24 18V85H254M24 ${p[1]}H254"/><path d="${polyline(points)}" fill="none" stroke="${colorFor(o)}" stroke-width="1.5"/><circle cx="${p[0]}" cy="${p[1]}" r="2.7" fill="${colorFor(o)}"/><text x="8" y="20" class="svg-plot-label">1</text><text x="10" y="89" class="svg-plot-label">0</text><text x="23" y="102" class="svg-plot-label">0</text><text x="254" y="102" class="svg-plot-label" text-anchor="end">${nf(maxR,1)}</text><text x="259" y="87" class="svg-math" style="font-size:12px">r</text><text x="9" y="9" class="svg-math" style="font-size:12px">π</text>`;
-  if(!M.isSpherical(o))$('#profile-chart').innerHTML=$('#profile-chart').innerHTML.replace('>r</text>','>u</text>');$('#profile-formula').textContent=M.spatialFormula(o);
+  $('#profile-chart').innerHTML=`<path class="svg-plot-grid" d="M24 18V85H254M24 ${p[1]}H254"/><path d="${polyline(points)}" fill="none" stroke="${colorFor(o)}" stroke-width="1.5"/><circle cx="${p[0]}" cy="${p[1]}" r="2.7" fill="${colorFor(o)}"/><text x="8" y="20" class="svg-plot-label">1</text><text x="10" y="89" class="svg-plot-label">0</text><text x="23" y="102" class="svg-plot-label">0</text><text x="254" y="102" class="svg-plot-label" text-anchor="end">${nf(maxR,1)}</text>${mathSvg(M.isSpherical(o)?'r':'u',259,73,18,25)}${mathSvg(String.raw`\pi`,7,-4,18,25)}`;
+  $('#profile-formula').innerHTML=mathHTML(M.spatialFormula(o));
 }
 function historyChart(selector,run,key,log=false){
   const all=run?.trace||[],data=all.filter((_,i)=>i%Math.max(1,Math.floor(all.length/700))===0||i===all.length-1),svg=$(selector);
   if(!data.length){svg.innerHTML='<text x="20" y="65" class="svg-plot-label">Запустите алгоритм, чтобы увидеть историю</text>';return;}
   const values=data.map(t=>log?Math.log10(Math.max(t[key],1e-12)):t[key]);let lo=Math.min(...values),hi=Math.max(...values);if(hi-lo<1e-9){hi+=.5;lo-=.5;}
   const minX=0,maxX=Math.max(1,all.at(-1).k),path=polyline(data.map((t,i)=>[48+t.k/maxX*455,102-(values[i]-lo)/(hi-lo)*88]));let grid='';
-  for(let i=0;i<3;i++){const value=lo+(hi-lo)*i/2,y=102-i*44;grid+=`<path class="svg-plot-grid" d="M48 ${y}H505"/><text x="40" y="${y+3}" class="svg-plot-label" text-anchor="end">${log?'10^'+nf(value,1):nf(value,2)}</text>`;}
+  for(let i=0;i<3;i++){const value=lo+(hi-lo)*i/2,y=102-i*44;grid+=`<path class="svg-plot-grid" d="M48 ${y}H505"/>${log?mathSvg('10^{'+nf(value,1).replace(',','{,}')+'}',0,y-11,42,28):`<text x="40" y="${y+3}" class="svg-plot-label" text-anchor="end">${nf(value,2)}</text>`}`;}
   svg.innerHTML=grid+`<path class="svg-plot-line" stroke="${run.color}" d="${path}"/><text x="48" y="121" class="svg-plot-label">0</text><text x="505" y="121" class="svg-plot-label" text-anchor="end">k = ${maxX}</text>`;
   if(scrubIndex!==null){const t=all[scrubIndex],x=48+t.k/maxX*455;svg.innerHTML+=`<path class="svg-axis" stroke-dasharray="2 3" d="M${x} 12V104"/>`;}
 }
 function render(){
   dirty=false;const ev=M.evaluate(app.x,app.model,true),o=selected(),obj=app.model.objects.find(v=>v.id===o.id),term=ev.terms.find(v=>v.id===o.id),run=app.selectedRun,t=currentTrace();
-  $('#footer-formula').textContent=app.model.general||!app.solver.reduction?(app.p===Infinity?'F∞(x) = Σ βⱼ supα Rⱼ(x,α)':'Fₚ(x) = Σ βⱼ (∫₀¹ Rⱼ(x,α)ᵖ dα)¹⁄ᵖ'):app.p===Infinity?'F∞(x) = Σ βⱼ (‖x − cⱼ‖ + supα rⱼ(α))':'Fₚ(x) = Σ βⱼ (∫₀¹ (‖x − cⱼ‖ + rⱼ(α))ᵖ dα)¹⁄ᵖ';
-  const shownGap=t?t.gap:ev.gap;$('#bound-label').textContent='Оценка ε';$('#bound-label').title=app.model.general?'ε ≤ ‖g‖ · 2Fₚ/Σβⱼ':'ε ≤ ‖g‖ · max dⱼ';$('#norm-label').textContent='‖g‖';$('#solver-method-note').textContent='xᵏ⁺¹ = xᵏ − η₀gᵏ/(k + 1). Критерий может возрастать на отдельных шагах. '+(app.solver.reduction?'Для круговых срезов включена радиальная редукция.':'Все срезы вычисляются общей формулой без редукции.')+' Оценка ε не учитывает погрешность квадратуры; малый шаг не означает достижения ε.';
-  $('#coordinates-label').textContent=!run?'Старт x₀':scrubIndex===null&&run.done&&shownGap<=run.tolerance?'Решение x*':'Итерация xᵏ';
+  const radial=!app.model.general&&app.solver.reduction;
+  const R=radial?String.raw`\lVert x-c_j\rVert+r_j(\alpha)`:String.raw`R_j(x,\alpha)`;
+  const objective=app.p===Infinity?(radial?String.raw`F_\infty(x)=\sum_j\beta_j\left(\lVert x-c_j\rVert+\sup_\alpha r_j(\alpha)\right)`:String.raw`F_\infty(x)=\sum_j\beta_j\sup_\alpha R_j(x,\alpha)`):String.raw`F_p(x)=\sum_j\beta_j\left(\int_0^1\left(${R}\right)^p\,d\alpha\right)^{1/p}`;
+  $('#criterion-formula').innerHTML='Взвешенная сумма расстояний до нечётких объектов.'+mathHTML(objective,true);
+  const shownGap=t?t.gap:ev.gap;
+  $('#bound-tip').innerHTML='Верхняя оценка отклонения значения критерия от минимума: '+mathHTML(app.model.general?String.raw`\varepsilon\le\lVert g\rVert\frac{2F_p}{\sum_j\beta_j}`:String.raw`\varepsilon\le\lVert g\rVert\max_j d_j`)+'. Не учитывает погрешность квадратуры.';
+  $('#solver-method-note').textContent='Начальный шаг задаёт величину перемещения, точность - условие остановки. Скорость меняет только темп воспроизведения. На отдельных шагах критерий может возрастать.';
+  $('#coordinates-label').innerHTML=(!run?'Старт ':scrubIndex===null&&run.done&&shownGap<=run.tolerance?'Решение ':'Итерация ')+mathHTML(!run?'x_0':scrubIndex===null&&run.done&&shownGap<=run.tolerance?'x^*':'x^k');
+  $('#coordinates-tip').textContent=!run?'Начальная точка, из которой запускается метод.':scrubIndex===null&&run.done&&shownGap<=run.tolerance?'Точка, в которой достигнута заданная точность по значению критерия.':'Точка на отображаемой итерации метода; при просмотре истории показывает выбранный шаг.';
   $('#total').textContent=nf(ev.F,6);$('#coordinates').textContent=pt(app.x,6);$('#coordinates').title=pt(app.x,10);$('#bound').textContent=Number.isFinite(shownGap)&&shownGap>0&&shownGap<.0001?shownGap.toExponential(2).replace('.',','):nf(shownGap,5);$('#norm').textContent=ev.norm>0&&ev.norm<.0001?ev.norm.toExponential(2).replace('.',','):nf(ev.norm,6);$('#iteration').textContent=scrubIndex!==null?t?.k||0:run?.k||0;$('#alpha-value').textContent=nf(app.alpha,2);
   const geometry=M.cutGeometry(o,app.x,app.alpha);$('#selected-radius').textContent=nf(geometry.r);$('#selected-d').textContent=nf(geometry.d);$('#selected-R').textContent=nf(geometry.R);$('#selected-distance').textContent=nf(term?.D??Infinity);$('#selected-m').textContent=nf(obj.m);$('#selected-s').textContent=nf(obj.s2);
   $('#issue').hidden=!app.model.problem;$('#issue').textContent=app.model.problem;for(const id of['step','play','finish','multi'])$('#'+id).disabled=!!app.model.problem;
   $('#show-step').disabled=!!app.model.problem;
-  $('#numerics-status').textContent=!app.solver.reduction?'Общая формула · без редукции':app.model.general?'Общие срезы · круговые с редукцией':app.p===2?'Точная редукция D₂':app.p===1?'D₁ = d + m; минимум может быть неединственным':app.p===Infinity?'D∞ = d + sup r':Number.isInteger(app.p)?'Интегрирование через моменты радиуса':'Дробный p · детерминированная квадратура';
-  const F=ev.F;$('#contribution-rows').innerHTML=app.objects.map(v=>{const a=ev.terms.find(t=>t.id===v.id),geo=M.cutGeometry(v,app.x,app.alpha),r=geo.r,d=geo.d,share=a&&Number.isFinite(F)&&F>0?a.contribution/F:0;return `<tr data-selected="${v.id===app.selected}" style="--object:${colorFor(v)}"><td><button data-table-object="${v.id}"><i class="object-dot"></i>A${v.id}</button></td><td>${M.profiles[v.type]}${M.isSpherical(v)?'':' · '+M.shapes[v.shape]}</td><td>${nf(v.b,2)}</td><td>${nf(r)}</td><td>${nf(d)}</td><td>${nf(d+r)}</td><td>${nf(geo.R)}</td><td>${nf(a?.D??Infinity)}</td><td>${nf(a?.contribution??Infinity)}</td><td><i class="share-bar" style="width:${share*75}px"></i>${nf(share*100,1)}%</td></tr>`;}).join('');
+  const F=ev.F;$('#contribution-rows').innerHTML=app.objects.map(v=>{const a=ev.terms.find(t=>t.id===v.id),geo=M.cutGeometry(v,app.x,app.alpha),r=geo.r,d=geo.d,share=a&&Number.isFinite(F)&&F>0?a.contribution/F:0;return `<tr data-selected="${v.id===app.selected}" style="--object:${colorFor(v)}"><td><button data-table-object="${v.id}"><i class="object-dot"></i>${mathHTML('A_{'+v.id+'}')}</button></td><td>${M.profiles[v.type]}${M.isSpherical(v)?'':' · '+M.shapes[v.shape]}</td><td>${nf(v.b,2)}</td><td>${nf(r)}</td><td>${nf(d)}</td><td>${nf(d+r)}</td><td>${nf(geo.R)}</td><td>${nf(a?.D??Infinity)}</td><td>${nf(a?.contribution??Infinity)}</td><td><i class="share-bar" style="width:${share*75}px"></i>${nf(share*100,1)}%</td></tr>`;}).join('');
   profilePlot(o);historyChart('#cost-chart',run,'F');historyChart('#gap-chart',run,'gap',true);
   $('#scrub').max=Math.max(0,(run?.trace.length||1)-1);$('#scrub').value=scrubIndex===null?(run?.trace.length||1)-1:scrubIndex;$('#scrub-value').textContent=scrubIndex===null?run?.k||0:t?.k||0;$('#runs-count').textContent=app.runs.length;
-  $('#run-list').innerHTML=app.runs.length?app.runs.map(r=>{const end=r.trace.at(-1);return `<button class="run-card" data-run-id="${r.id}" data-selected="${r===run}"><div><span style="color:${r.color}">Запуск ${r.id}</span><span>p = ${pn(r.p)}</span></div><small>${M.algorithms[r.solver.algorithm]} · η₀ = ${nf(r.solver.eta0,2)} · ${r.solver.reduction?'с редукцией':'без редукции'}</small><small>x₀ = ${pt(r.start,2)}</small><small>x = ${pt(end?.x||r.start,6)}</small><small>F = <strong>${nf(end?.F??NaN,6)}</strong> · k = ${r.k}</small>${r.best?`<small>Лучшая F = ${nf(r.best.F,6)} при x = ${pt(r.best.x,6)}, k = ${r.best.k}</small>`:''}<small>${r.done?r.reason||'Завершено':'Остановлен / выполняется'}</small></button>`;}).join(''):'<p class="empty">Здесь появятся отдельные запуски с их стартами, настройками и результатами.</p>';
+  $('#run-list').innerHTML=app.runs.length?app.runs.map(r=>{const end=r.trace.at(-1);return `<button class="run-card" data-run-id="${r.id}" data-selected="${r===run}"><div><span style="color:${r.color}">Запуск ${r.id}</span><span>p = ${pn(r.p)}</span></div><small>${M.algorithms[r.solver.algorithm]} · ${mathHTML(String.raw`\eta_0`)} = ${nf(r.solver.eta0,2)} · ${r.solver.reduction?'с редукцией':'без редукции'}</small><small>${mathHTML('x_0')} = ${pt(r.start,2)}</small><small>x = ${pt(end?.x||r.start,6)}</small><small>F = <strong>${nf(end?.F??NaN,6)}</strong> · k = ${r.k}</small>${r.best?`<small>Лучшая F = ${nf(r.best.F,6)} при x = ${pt(r.best.x,6)}, k = ${r.best.k}</small>`:''}<small>${r.done?r.reason||'Завершено':'Остановлен / выполняется'}</small></button>`;}).join(''):'<p class="empty">Здесь появятся отдельные запуски с их стартами, настройками и результатами.</p>';
   app.iteration=t?.k??run?.k??0;scene.render(app);
 }
 function tab(name){showAnalysis();$$('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===name)));for(const v of['contributions','convergence','runs'])$('#tab-'+v).hidden=v!==name;schedule();}
@@ -146,7 +183,7 @@ function remove(){if(app.objects.length<=1)return toast('Для задачи н�
 $('#delete').addEventListener('click',remove);
 $('#p').addEventListener('change',e=>{if(safe(()=>setP(Number(e.target.value)))===false)e.target.value=app.p===Infinity?'':app.p;});$('#infinity').addEventListener('click',()=>safe(()=>setP(app.p===Infinity?2:Infinity)));$$('[data-p]').forEach(b=>b.addEventListener('click',()=>safe(()=>setP(Number(b.dataset.p)))));
 $('#alpha').addEventListener('input',e=>{app.alpha=Number(e.target.value);schedule();});
-$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{app.view=b.dataset.view;$$('[data-view]').forEach(v=>v.setAttribute('aria-pressed',String(v===b)));$('#scene-equation').textContent=app.view==='landscape'?'z ∝ Fₚ(x) − min Fₚ':app.view==='levels'?'Aⱼ(α) ⊂ ℝ²':'z = πⱼ(x, y)';$('#scene-description').textContent=app.view==='landscape'?'Поле критерия на видимой сетке':app.view==='levels'?'Проекция сечений на координатную плоскость':'Высота — возможность положения';scene.changed();schedule();}));
+$$('[data-view]').forEach(b=>b.addEventListener('click',()=>{app.view=b.dataset.view;$$('[data-view]').forEach(v=>v.setAttribute('aria-pressed',String(v===b)));$('#scene-equation').innerHTML=mathHTML(app.view==='landscape'?String.raw`z\propto F_p(x)-\min F_p`:app.view==='levels'?String.raw`A_j(\alpha)\subset\mathbb R^2`:String.raw`z=\pi_j(x,y)`);$('#scene-description').textContent=app.view==='landscape'?'Поле критерия на видимой сетке':app.view==='levels'?'Проекция α-уровневых множеств на координатную плоскость':'Высота - возможность положения';scene.changed();schedule();}));
 $$('[data-tool]').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
 $('#rays').addEventListener('change',e=>{app.display.rays=e.target.value;schedule();});
 for(const key of['grid','labels','contours','paths','gradient','step'])$('#show-'+key).addEventListener('change',e=>{app.display[key]=e.target.checked;schedule();});
@@ -163,9 +200,37 @@ $('#scrub').addEventListener('input',e=>{pause();scrubIndex=Number(e.target.valu
 $('#run-list').addEventListener('click',e=>{const b=e.target.closest('[data-run-id]');if(!b)return;pause();const run=app.runs.find(r=>r.id===Number(b.dataset.runId));if(run.p!==app.p||JSON.stringify(run.solver)!==JSON.stringify(app.solver)){app.p=run.p;app.solver={...run.solver};syncSolverControls();invalidate(false);}app.selectedRun=run;scrubIndex=null;app.x=[...(run.trace.at(-1)?.x||run.start)];app.start=[...run.start];$('#start-x').value=run.start[0];$('#start-y').value=run.start[1];$('#solver-status').textContent='Просмотр запуска '+run.id+' · p = '+pn(run.p)+' · '+(run.reason||'Остановлен');schedule();});
 $('#clear-runs').addEventListener('click',()=>invalidate());
 $('#examples').addEventListener('click',()=>$('#example-dialog').showModal());$$('[data-example]').forEach(b=>b.addEventListener('click',()=>loadExample(b.dataset.example)));
-for(const id of['help-open','help-footer'])$('#'+id).addEventListener('click',()=>$('#help').showModal());
-$('#theme').addEventListener('click',()=>{const dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';$('#theme').setAttribute('aria-pressed',String(dark));$('#theme').title=dark?'Светлая тема':'Тёмная тема';schedule();});
-$('#export').addEventListener('click',()=>{const data={version:2,revision:11,objects:app.objects,p:app.p===Infinity?'Infinity':app.p,start:app.start,alpha:app.alpha,solver:{...app.solver}},url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='weber-scene.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+function openInfo(id){
+  for(const other of ['help','model-dialog'])if($('#'+other).open)$('#'+other).close();
+  $('#'+id).showModal();
+}
+$('#help-open').addEventListener('click',()=>openInfo('help'));
+for(const id of ['help-footer','model-from-help'])$('#'+id).addEventListener('click',()=>openInfo('model-dialog'));
+for(const id of ['help','model-dialog','criterion-dialog']){
+  const dialog=$('#'+id);
+  const onBackdrop=e=>{
+    const r=dialog.getBoundingClientRect();
+    return e.target===dialog&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom);
+  };
+  let pressedBackdrop=false;
+  dialog.addEventListener('pointerdown',e=>{pressedBackdrop=onBackdrop(e);});
+  dialog.addEventListener('pointercancel',()=>{pressedBackdrop=false;});
+  dialog.addEventListener('click',e=>{if(pressedBackdrop&&onBackdrop(e))dialog.close();pressedBackdrop=false;});
+}
+
+$('#theme').addEventListener('click',()=>{const dark=document.body.dataset.theme!=='dark';document.body.dataset.theme=dark?'dark':'light';$('#theme').setAttribute('aria-pressed',String(dark));$('#theme').setAttribute('aria-label',dark?'Светлая тема':'Тёмная тема');schedule();});
+$('#export').addEventListener('click',async()=>{
+  const data={version:2,revision:11,objects:app.objects,p:app.p===Infinity?'Infinity':app.p,start:app.start,alpha:app.alpha,solver:{...app.solver}},blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  try{
+    if(window.showSaveFilePicker){
+      const handle=await window.showSaveFilePicker({suggestedName:'weber-scene.json',types:[{description:'Сценарий Вебера (JSON)',accept:{'application/json':['.json']}}]}),file=await handle.createWritable();
+      await file.write(blob);await file.close();
+    }else{
+      const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='weber-scene.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      toast('Папку сохранения определяет браузер. Включите в его настройках запрос места для каждого скачивания.');
+    }
+  }catch(error){if(error.name!=='AbortError')toast('Не удалось сохранить: '+error.message);}
+});
 $('#import').addEventListener('click',()=>$('#file-input').click());$('#file-input').addEventListener('change',async e=>{
   const file=e.target.files[0];if(!file)return;
   try{if(file.size>2e6)throw Error('Сценарий должен быть не больше 2 МБ.');const data=JSON.parse(await file.text()),p=data.p==='Infinity'?Infinity:data.p,solver=M.solverOptions(data.solver);M.validate(data.objects,p);if(!Array.isArray(data.start)||data.start.length!==2||!data.start.every(Number.isFinite)||data.start.some(v=>Math.abs(v)>1e6)||!Number.isFinite(data.alpha)||data.alpha<.01||data.alpha>1)throw Error('Некорректная начальная точка или α.');app.objects=data.objects.map(o=>({id:o.id,x:o.x,y:o.y,a:o.a,b:o.b,type:o.type,core:o.core,q:o.q,...M.shapeOf(o)}));app.selected=app.objects[0].id;app.p=p;app.solver=solver;syncSolverControls();app.alpha=data.alpha;app.start=[...data.start];app.x=[...data.start];$('#p').value=p===Infinity?'':p;$('#infinity').setAttribute('aria-pressed',String(p===Infinity));$('#alpha').value=app.alpha;$('#start-x').value=app.start[0];$('#start-y').value=app.start[1];invalidate();scene.fit(app.objects);schedule();toast('Сценарий загружен');}catch(error){toast('Не удалось открыть: '+error.message);}e.target.value='';
@@ -179,7 +244,7 @@ $('#stage').addEventListener('pointerdown',e=>safe(()=>{
   if(e.button!==0&&e.button!==1&&e.button!==2)return;
   e.preventDefault();
   app.hover=null;schedule();
-  const p=position(e);$('#stage').focus({preventScroll:true});
+  const p=position(e);$('#stage').classList.add('pointer-focus');$('#stage').focus({preventScroll:true});
   if(e.button===1){
     closeEditor();
     e.preventDefault();const anchor=[scene.width/2,scene.height/2];
@@ -225,3 +290,9 @@ new IntersectionObserver(es=>{visible=es.at(-1).isIntersecting;if(visible)schedu
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});
 window.weberState=()=>({version:2,revision:11,objects:app.objects.map(o=>({...o})),p:app.p,solver:{...app.solver},alpha:app.alpha,x:[...app.x],start:[...app.start],F:M.evaluate(app.x,app.model).F,gap:M.evaluate(app.x,app.model).gap,running,view:app.view,tool:app.tool,selected:app.selected,issue:app.model.problem,runs:app.runs.map(r=>({id:r.id,p:r.p,solver:r.solver,start:r.start,x:r.trace.at(-1)?.x,F:r.trace.at(-1)?.F,k:r.k,done:r.done,reason:r.reason,best:r.best,traceLength:r.trace.length})),webgl:!!scene.gl,viewBounds:{...scene.bounds}});
 syncObjects();scene.fit(app.objects);render();
+
+// Escape dismisses a hint until the pointer or keyboard focus leaves its button.
+$$('[data-tooltip]').forEach(button=>{
+  for(const type of ['pointerenter','focus','pointerleave','blur'])button.addEventListener(type,()=>button.classList.remove('tooltip-dismissed'));
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$$('[data-tooltip]').forEach(button=>button.classList.add('tooltip-dismissed'));});

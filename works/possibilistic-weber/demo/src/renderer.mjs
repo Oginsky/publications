@@ -7,7 +7,7 @@ class MathSpace{
   constructor(stage){
     this.stage=stage;this.back=document.querySelector('#space-back');this.front=document.querySelector('#space-front');this.canvas=document.querySelector('#space-canvas');
     this.azimuth=55;this.elevation=25;this.heightFactor=.23;this.width=800;this.height=500;this.P={origin:[400,260],scale:25,azimuth:55,elevation:25};this.view='surfaces';this.meshDirty=true;this.field=null;this.last=null;
-    try{this.initGL();}catch(error){this.gl=null;document.querySelector('#renderer-label').textContent='SVG · поверхности недоступны';this.canvas.hidden=true;}
+    try{this.initGL();}catch(error){this.gl=null;document.querySelector('#renderer-label').textContent='Поверхности недоступны';this.canvas.hidden=true;}
     new ResizeObserver(()=>{
       const r=stage.getBoundingClientRect();if(!r.width||!r.height)return;
       const pivot=this.bounds?this.floor(this.width/2,this.height/2):null,oldSize=Math.min(this.width,this.height);
@@ -28,7 +28,7 @@ class MathSpace{
     const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);this.program=program;this.buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);
     for(const [name,size,offset]of [['aPos',3,0],['aNormal',3,12],['aColor',3,24],['aLevel',1,36]]){const loc=gl.getAttribLocation(program,name);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,40,offset);}
     this.uProjection=gl.getUniformLocation(program,'uProjection');this.uDark=gl.getUniformLocation(program,'uDark');this.uField=gl.getUniformLocation(program,'uField');gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.clearColor(0,0,0,0);
-    this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.gl=null;this.canvas.hidden=true;document.querySelector('#renderer-label').textContent='SVG · контекст WebGL потерян';if(this.last)this.render(this.last);});
+    this.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.gl=null;this.canvas.hidden=true;document.querySelector('#renderer-label').textContent='Поверхности недоступны';if(this.last)this.render(this.last);});
   }
   domain(objects){
     let xmin=Infinity,xmax=-Infinity,ymin=Infinity,ymax=-Infinity;
@@ -104,13 +104,13 @@ class MathSpace{
     if(app.display.labels){
       for(let x=Math.ceil(b.xmin/step)*step;x<=b.xmax;x+=step){const v=this.at(x,b.ymin);back+=`<text class="svg-label" x="${v[0]}" y="${v[1]+16}" text-anchor="middle">${fmt(x)}</text>`;}
       for(let y=Math.ceil(b.ymin/step)*step;y<=b.ymax;y+=step){const v=this.at(b.xmin,y);back+=`<text class="svg-label" x="${v[0]-9}" y="${v[1]+2}" text-anchor="end">${fmt(y)}</text>`;}
-      for(const [text,p]of [['x',this.at(b.xmax,b.ymin)],['y',this.at(b.xmin,b.ymax)]])back+=`<text class="svg-math" x="${p[0]+10}" y="${p[1]+13}">${text}</text>`;
+      for(const [text,p]of [['x',this.at(b.xmax,b.ymin)],['y',this.at(b.xmin,b.ymax)]])back+=mathSvg(text,p[0]+10,p[1]-3,22,26);
     }
     if(app.view!=='landscape'){
       if(app.view==='surfaces')front+=`<path d="${polyline(boundary.map(v=>this.at(...v,cut)))}Z" fill="${document.body.dataset.theme==='dark'?'#9bd7ce':'#4b9ca3'}" fill-opacity=".025" stroke="${document.body.dataset.theme==='dark'?'#86bcb6':'#83b5b9'}" stroke-opacity=".28" stroke-width=".6"/>`;
       if(this.elevation<86){const vertical=this.at(b.xmin,b.ymin,Z),floor=this.at(b.xmin,b.ymin);
       front+=this.line(floor,vertical,'class="svg-axis"');for(const v of[0,.25,.5,.75,1]){const p=this.at(b.xmin,b.ymin,v*Z);front+=this.line([p[0]-3,p[1]],[p[0]+3,p[1]],'class="svg-axis"');if(app.display.labels)front+=`<text class="svg-label" x="${p[0]-7}" y="${p[1]+3}" text-anchor="end">${fmt(v)}</text>`;}
-      if(app.display.labels)front+=`<text class="svg-math" x="${vertical[0]-2}" y="${vertical[1]-12}" text-anchor="middle">π</text>`;}
+      if(app.display.labels)front+=mathSvg(String.raw`\pi`,vertical[0]-9,vertical[1]-30,24,26);}
     }
     for(const o of app.objects){
       const col=colorFor(o),r=M.radius(alpha,o),c=[o.x,o.y];
@@ -120,7 +120,7 @@ class MathSpace{
       }
       const p=this.at(o.x,o.y,0);front+=this.marker(p,o.id===app.selected?4:3,'svg-halo',`data-center="${o.id}" style="fill:${col};stroke:var(--paper)"`);
       if(o.id===app.selected)front+=this.marker(p,8,'',`fill="none" stroke="${col}" stroke-width=".8" opacity=".7"`);
-      if(app.display.labels)front+=`<text class="svg-object-label" fill="${col}" x="${p[0]+9}" y="${p[1]-8}">c<tspan dy="3" font-size="9">${o.id}</tspan></text>`;
+      if(app.display.labels)front+=`<g style="color:${col}">${mathSvg('c_{'+o.id+'}',p[0]+9,p[1]-24,38,28)}</g>`;
       if(app.view!=='landscape'&&(app.display.rays==='all'||app.display.rays==='selected'&&o.id===app.selected)){
         const geometry=M.cutGeometry(o,app.x,alpha),far=geometry.far,p0=this.at(...app.x,cut),p1=this.at(...far,cut);
         front+=this.line(p0,p1,'class="svg-distance-halo"')+this.line(p0,p1,`class="svg-ray svg-distance" stroke="${col}"`)+this.marker(p1,2.8,'',`fill="var(--paper)" stroke="${col}" stroke-width="1"`);
@@ -133,21 +133,21 @@ class MathSpace{
     const xZ=this.pointHeight(app.x,app),xFloor=this.at(...app.x,xZ),xLevel=this.at(...app.x,app.view==='levels'?0:app.view==='landscape'?xZ:cut);
     if(app.view==='surfaces')front+=this.line(xFloor,this.at(...app.x,Z),'class="svg-axis" stroke-dasharray="2 4"');
     front+=this.marker(xFloor,5,'svg-current')+this.marker(xLevel,3.5,'svg-current');
-    if(app.display.labels)front+=`<text class="svg-object-label" x="${xFloor[0]+9}" y="${xFloor[1]+17}" fill="var(--ink)">x</text>`;
+    if(app.display.labels)front+=mathSvg('x',xFloor[0]+9,xFloor[1]+2,24,26);
     const probe=app.hover||app.x,probeZ=app.hover?this.pointHeight(probe,app):xZ,probeAt=app.hover?this.at(...probe,probeZ):xFloor;let vectors='';
     if(app.hover&&(app.display.gradient||app.display.step&&!app.selectedRun)&&!app.model.problem)vectors+=this.marker(probeAt,5,'svg-probe','data-probe-point');
-    if(app.display.gradient&&!app.model.problem){const ev=M.evaluate(probe,app.model),B=app.objects.reduce((sum,o)=>sum+o.b,0),tip=probe.map((v,i)=>v-ev.g[i]*b.span*.08/Math.max(B,1)),end=this.at(...tip,probeZ);if(M.distance(probeAt,end)>2){vectors+=this.line(probeAt,end,'class="svg-axis svg-gradient" data-subgradient')+this.marker(end,2,'svg-current');if(app.display.labels)vectors+=`<text class="svg-label" x="${end[0]+5}" y="${end[1]}">−g</text>`;}}
+    if(app.display.gradient&&!app.model.problem){const ev=M.evaluate(probe,app.model),B=app.objects.reduce((sum,o)=>sum+o.b,0),tip=probe.map((v,i)=>v-ev.g[i]*b.span*.08/Math.max(B,1)),end=this.at(...tip,probeZ);if(M.distance(probeAt,end)>2){vectors+=this.line(probeAt,end,'class="svg-axis svg-gradient" data-subgradient')+this.marker(end,2,'svg-current');if(app.display.labels)vectors+=mathSvg('-g',end[0]+5,end[1]-14,30,26);}}
     if(app.display.step&&!app.model.problem){
       const settings=app.selectedRun?.solver||app.solver,base=app.selectedRun?app.x:probe,k=app.selectedRun?(app.iteration??app.selectedRun.k):0,v=M.evaluate(base,app.model);
       if(Number.isFinite(settings.eta0)&&settings.eta0>0&&settings.eta0<=1e6&&Number.isInteger(k)&&k>=0&&v.gap>settings.tolerance){
         const next=M.subgradientPoint(base,v.g,settings.eta0,k);
-        if(next.every(Number.isFinite)){const from=this.at(...base,this.pointHeight(base,app)),to=this.at(...next,this.pointHeight(next,app));vectors+=this.line(from,to,'class="svg-axis" stroke-dasharray="3 3" data-step-segment')+this.marker(to,5,'svg-probe','data-step-result');if(app.display.labels)vectors+=`<text class="svg-object-label" x="${to[0]+9}" y="${to[1]+17}">x⁺</text>`;}
+        if(next.every(Number.isFinite)){const from=this.at(...base,this.pointHeight(base,app)),to=this.at(...next,this.pointHeight(next,app));vectors+=this.line(from,to,'class="svg-axis" stroke-dasharray="3 3" data-step-segment')+this.marker(to,5,'svg-probe','data-step-result');if(app.display.labels)vectors+=mathSvg('x^+',to[0]+9,to[1]+2,30,26);}
       }
     }
     front+=`<g data-probe="${app.hover?'hover':'current'}">${vectors}</g>`;
-    const start=this.at(...app.start,this.pointHeight(app.start,app));front+=this.line([start[0]-4,start[1]-4],[start[0]+4,start[1]+4],'class="svg-axis"')+this.line([start[0]-4,start[1]+4],[start[0]+4,start[1]-4],'class="svg-axis"');if(app.display.labels)front+=`<text class="svg-object-label" fill="var(--muted)" x="${start[0]+8}" y="${start[1]-7}">x₀</text>`;
+    const start=this.at(...app.start,this.pointHeight(app.start,app));front+=this.line([start[0]-4,start[1]-4],[start[0]+4,start[1]+4],'class="svg-axis"')+this.line([start[0]-4,start[1]+4],[start[0]+4,start[1]-4],'class="svg-axis"');if(app.display.labels)front+=mathSvg('x_0',start[0]+8,start[1]-23,30,26);
     this.back.innerHTML=back;this.front.innerHTML=front;
-    document.querySelector('#plane-label').textContent=app.view==='landscape'?(this.field?'Fₚ: '+fmt(this.field.low)+' … '+fmt(this.field.high):'Fₚ = ∞'):'α = '+alpha.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});
-    document.querySelector('#renderer-label').textContent=app.view==='landscape'&&app.model.problem?'Fₚ = ∞ · конечное поле не определено':this.field?`${this.gl?'3D':'SVG'} · поле Fₚ · сетка ${this.field.N} × ${this.field.N}`:this.gl?(app.view==='levels'?'Аналитические срезы':'π ≥ 0,005 · 3D'):'SVG · срезы';
+    document.querySelector('#plane-label').innerHTML=app.view==='landscape'?(this.field?mathHTML('F_p')+': '+fmt(this.field.low)+' … '+fmt(this.field.high):mathHTML(String.raw`F_p=\infty`)):mathHTML(String.raw`\alpha`)+ ' = '+alpha.toLocaleString('ru-RU',{minimumFractionDigits:2,maximumFractionDigits:2});
+    document.querySelector('#renderer-label').textContent=app.view==='landscape'?(app.model.problem?'Поле не определено':'Поле критерия'):app.view==='levels'?'α-уровневые множества':this.gl?'Поверхности':'Показаны α-уровневые множества';
   }
 }
